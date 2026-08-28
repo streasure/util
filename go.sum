@@ -1,0 +1,4 @@
+github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
+github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
+github.com/kai1987/go-text-censor v0.0.0-20180118163317-7afb6c25ec65 h1:GNK0sdvr0Q309Lj+EiG4EtZ+ti2g41SrYc3g50SNUiE=
+github.com/kai1987/go-text-censor v0.0.0-20180118163317-7afb6c25ec65/go.mod h1:Qy+RCPaieqMM/aTcyWwRSZ2TBiPVFkEvDgITgD9JCOA=
