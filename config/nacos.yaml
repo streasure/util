@@ -1,0 +1,41 @@
+# Nacos 服务注册与发现配置
+# 供所有引用 util 的项目共用
+# 项目启动时通过 config.Load("path/to/nacos.yaml") 加载后传入 nacos.NewRegistry / nacos.NewDiscovery
+
+# --- 公共连接信息 ---
+nacos:
+  enabled: true
+  endpoint: "http://127.0.0.1:8080"
+  namingEndpoint: "http://127.0.0.1:56000"
+  namespace: ""
+  group: "DEFAULT_GROUP"
+  username: "nacos"
+  password: "nacos"
+  apiVersion: "v3"
+
+# --- 服务注册（Registry）---
+registry:
+  enabled: false
+  service:
+    serviceName: "my-service"
+    addr: "127.0.0.1:8080"
+    weight: 1
+    zone: "default"
+    metadata:
+      version: "1.0.0"
+  heartbeatInterval: "3s"
+  heartbeatTTL: "15s"
+
+# --- 服务发现（Discovery）---
+discovery:
+  enabled: false
+  service:
+    serviceName: "upstream-service"
+  scanInterval: "10s"
+  zone: "default"
+
+# --- 配置中心（ConfigCenter）---
+configCenter:
+  enabled: false
+  dataID: "app.yaml"
+  pollInterval: "5s"

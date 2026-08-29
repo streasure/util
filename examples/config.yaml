@@ -8,6 +8,20 @@ monitor:
     enabled: true
     addr: ":9100"
     path: "/metrics"
+    prefix: "app"
+
+# Grafana 配置（独立 YAML 见 config/grafana.yaml）
+grafana:
+  datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: "http://localhost:9090"
+      isDefault: true
+  dashboards:
+    - name: "Game Gateway Overview"
+      file: "dashboards/gateway-overview.json"
+      folder: "sgate"
 
 # Nacos 服务注册配置
 # 服务启动后自动注册到 Nacos，心跳保活

@@ -1,0 +1,24 @@
+# Grafana 配置
+# 用于 Grafana 数据源和 Dashboard 自动导入
+
+# --- 数据源 ---
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: "http://localhost:9090"
+    isDefault: true
+    editable: true
+
+# --- Dashboard 导入 ---
+# 从 JSON 文件或 Grafana.com ID 自动导入 Dashboard
+dashboards:
+  # 方式一：从本地 JSON 文件导入
+  - name: "Game Gateway Overview"
+    file: "dashboards/gateway-overview.json"
+    folder: "sgate"
+
+  # 方式二：从 Grafana.com 导入（按 ID）
+  # - name: "Node Exporter"
+  #   grafanaId: 1860
+  #   folder: "sgate"

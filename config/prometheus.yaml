@@ -1,0 +1,11 @@
+# Prometheus 指标导出配置
+# 配合 Prometheus + Grafana 使用
+#   应用 metrics :9100  ← 默认值（让出 9090 给 Prometheus）
+#   Prometheus  :9090  ← Prometheus 自身默认
+#   Grafana     :3000  ← Grafana 自身默认
+
+prometheus:
+  enabled: true
+  addr: ":9100"
+  path: "/metrics"
+  prefix: "app"

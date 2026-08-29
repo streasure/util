@@ -49,6 +49,7 @@ type ServiceEventType string
 const (
 	EventRegister   ServiceEventType = "register"
 	EventDeregister ServiceEventType = "deregister"
+	EventHeartbeat  ServiceEventType = "heartbeat"
 )
 
 type ServiceEvent struct {
