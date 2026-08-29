@@ -16,8 +16,12 @@ github.com/streasure/util
 ├── errors/         # 错误处理（堆栈/错误码/包装）
 ├── gevent/         # 反射事件分发器
 ├── sensitive/      # 敏感词过滤
-├── monitor/        # Prometheus 监控导出
+├── monitor/        # Prometheus 监控导出 + Grafana 配置
 ├── nacos/          # Nacos 服务注册/发现/配置中心
+├── config/         # 共用 YAML 配置文件
+│   ├── nacos.yaml
+│   ├── prometheus.yaml
+│   └── grafana.yaml
 └── examples/       # 配置示例
 ```
 
@@ -154,14 +158,27 @@ pool.Stop()
 | `NewExporter(cfg, provider)` | 创建导出器组件 |
 | `StatsProvider` 接口 | 实现 `Stats() Stats` 提供自定义指标 |
 | `Stats` | 指标结构（连接/消息/延迟/安全/系统/自定义） |
+| `ExporterConfig` | 导出器配置（enabled/addr/path/prefix） |
+| `GrafanaConfig` | Grafana 数据源/Dashboard 配置 |
 | `RenderPrometheusText(s)` | 渲染 Prometheus 文本格式 |
+| `RenderPrometheusTextWithPrefix(s, prefix)` | 带前缀渲染 |
 
 ```go
 exp := monitor.NewExporter(monitor.ExporterConfig{
-    Enabled: true, Addr: ":9100", Path: "/metrics",
+    Enabled: true, Addr: ":9100", Path: "/metrics", Prefix: "app",
 }, myProvider)
 container.Add(exp)
 ```
+
+### config/ - 共用 YAML 配置
+
+| 文件 | 配置结构 | 用途 |
+|------|---------|------|
+| `nacos.yaml` | `nacos.RegistryConfig` + `nacos.DiscoveryConfig` + `nacos.ConfigCenterConfig` | Nacos 连接/注册/发现/配置中心 |
+| `prometheus.yaml` | `monitor.ExporterConfig` | Prometheus 指标导出 |
+| `grafana.yaml` | `monitor.GrafanaConfig` | Grafana 数据源 + Dashboard 导入 |
+
+所有配置通过 `enabled` 字段控制启停，项目引用时直接加载对应 YAML 即可。
 
 支持的内置指标：
 
@@ -222,17 +239,29 @@ container.Add(cc)
 
 ## 配置示例
 
-完整配置见 `examples/config.yaml`：
+完整配置见 `examples/config.yaml` 和 `config/` 目录：
 
 ```yaml
-# Prometheus 监控
+# Prometheus 监控（见 config/prometheus.yaml）
 monitor:
   prometheus:
     enabled: true
     addr: ":9100"
     path: "/metrics"
+    prefix: "app"
 
-# Nacos 服务注册
+# Grafana（见 config/grafana.yaml）
+grafana:
+  datasources:
+    - name: Prometheus
+      type: prometheus
+      url: "http://localhost:9090"
+  dashboards:
+    - name: "Game Gateway Overview"
+      file: "dashboards/gateway-overview.json"
+      folder: "sgate"
+
+# Nacos 服务注册（见 config/nacos.yaml）
 nacosRegistry:
   enabled: false
   nacos:
@@ -276,4 +305,4 @@ go test ./... -v
 - **泛型优先**：`Clamp[T]` `Max[T]` `Abs[T]` `SetBit[T]` `WeightRandom[T]` 等
 - **组件化**：所有服务实现 `Component` 接口，统一生命周期管理
 - **插拔式**：配置 `enabled: false` 即可禁用，不引入任何开销
-- **向后兼容**：旧函数保留为 deprecated wrapper
+- **配置共用**：`config/` 目录提供 Nacos/Prometheus/Grafana 标准 YAML，项目直接引用
