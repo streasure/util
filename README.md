@@ -15,7 +15,9 @@ github.com/streasure/util
 ├── gametime/       # 游戏时间工具
 ├── errors/         # 错误处理（带堆栈）
 ├── gevent/         # 事件分发器
-└── sensitive/      # 敏感词过滤
+├── sensitive/      # 敏感词过滤
+├── monitor/        # Prometheus 监控导出
+└── nacos/          # Nacos 服务注册/发现/配置中心
 ```
 
 ## 包功能说明
@@ -24,10 +26,11 @@ github.com/streasure/util
 
 | 文件 | 函数 | 说明 |
 |------|------|------|
-| math.go | `ClampInt/ClampInt32/ClampInt64/ClampFloat64` | 值域限制 |
+| math.go | `Clamp[T]` | 值域限制（泛型，支持所有可比较类型） |
+| math.go | `Max[T]/Min[T]` | 最大值/最小值（泛型） |
+| math.go | `Abs[T]` | 绝对值（泛型，支持所有有符号整数） |
+| math.go | `Operator[T]` | 字符串运算符比较（泛型） |
 | math.go | `RandInt/RandInt32/RandInt64` | [min, max] 范围随机数 |
-| math.go | `MaxInt/MinInt/AbsInt` 等 | 最大值/最小值/绝对值 |
-| math.go | `OperatorInt/OperatorInt32/OperatorInt64` | 字符串运算符比较 |
 | time.go | `TimeStampToString/TimeToString` | 时间格式化 |
 | time.go | `DiffNatureDays` | 计算自然天差值 |
 | time.go | `IsSameDay/IsSameWeek/IsSameMonth` | 时间周期判断 |
@@ -41,8 +44,7 @@ github.com/streasure/util
 | slice.go | `UniqueSlice` | 切片去重（泛型） |
 | slice.go | `EqualSlice` | 无序切片相等判断（泛型） |
 | bitmask.go | `SetBitSlice/ResetBitSlice/HasBitSlice` | 字节数组位操作 |
-| bitmask.go | `SetBit32/ResetBit32/HasBit32` | int32 位操作 |
-| bitmask.go | `SetBit64/ResetBit64/HasBit64` | int64 位操作 |
+| bitmask.go | `SetBit[T]/ResetBit[T]/HasBit[T]` | 整数位操作（泛型） |
 | overflow.go | `CalcAddOverflow/CalcMinusOverflow` | 溢出安全的加减法 |
 | msg.go | `SyncMessage/AsyncMessage` | 同步/异步消息模式 |
 | uuid.go | `NewUUID/NewUUIDBytes` | UUID V4 生成 |
@@ -83,6 +85,8 @@ github.com/streasure/util
 | `NewPool(count)` | 创建固定 worker 数量的池 |
 | `Pool.Add(item)` | 提交任务 |
 | `Pool.Stop()` | 停止并等待所有 worker 完成 |
+| `NewTypedPool[T](count)` | 创建带返回值的泛型池 |
+| `TypedPool.Add(fn)` | 提交任务，返回 `<-chan T` |
 
 ### rand/ - 随机数工具
 
@@ -139,12 +143,72 @@ github.com/streasure/util
 | `CensorIsPass(text)` | 检查文本是否通过审查 |
 | `CensorAndReplace(text)` | 审查并替换敏感词为 `*` |
 
+### monitor/ - Prometheus 监控导出
+
+| 类型/函数 | 说明 |
+|-----------|------|
+| `NewExporter(cfg, provider)` | 创建 Prometheus 导出器组件 |
+| `StatsProvider` 接口 | 自定义指标提供者 |
+| `Stats` | 指标数据结构（连接/消息/延迟/安全/系统） |
+| `RenderPrometheusText(s)` | 渲染 Prometheus 文本格式 |
+
+所有组件通过 `Enabled` 配置控制是否接入：
+
+```yaml
+monitor:
+  prometheus:
+    enabled: true   # false 则不启动
+    addr: ":9100"
+    path: "/metrics"
+```
+
+### nacos/ - Nacos 服务注册/发现/配置中心
+
+| 类型/函数 | 说明 |
+|-----------|------|
+| `NewRegistry(cfg)` | 服务注册组件（心跳保活） |
+| `NewDiscovery(cfg)` | 服务发现组件（轮询拉取+变更回调） |
+| `NewConfigCenter(cfg)` | 配置中心组件（轮询监听配置变更） |
+| `Config` | Nacos 连接配置（支持 v1/v3 API） |
+| `ServiceInfo` | 服务实例信息 |
+
+所有组件通过 `Enabled` 配置控制是否接入：
+
+```yaml
+nacosRegistry:
+  enabled: false    # false 则不注册
+  nacos:
+    endpoint: "http://127.0.0.1:8080"
+    apiVersion: "v3"
+  service:
+    serviceName: "my-service"
+    addr: "127.0.0.1:8080"
+
+nacosDiscovery:
+  enabled: false    # false 则不发现
+  nacos:
+    endpoint: "http://127.0.0.1:8080"
+  service:
+    serviceName: "upstream-service"
+  scanInterval: "10s"
+
+nacosConfigCenter:
+  enabled: false    # false 则不拉取配置
+  nacos:
+    endpoint: "http://127.0.0.1:8080"
+    dataID: "app.yaml"
+```
+
+完整配置示例见 `examples/config.yaml`。
+
 ## 使用
 
 ```go
 import "github.com/streasure/util/util"
 import "github.com/streasure/util/rand"
 import "github.com/streasure/util/errors"
+import "github.com/streasure/util/monitor"
+import "github.com/streasure/util/nacos"
 ```
 
 ## 测试

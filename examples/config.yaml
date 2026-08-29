@@ -1,0 +1,64 @@
+# Prometheus 监控配置
+# 配合 Prometheus + Grafana 使用
+#   app metrics :9100
+#   Prometheus  :9090
+#   Grafana     :3000
+monitor:
+  prometheus:
+    enabled: true
+    addr: ":9100"
+    path: "/metrics"
+
+# Nacos 服务注册配置
+# 服务启动后自动注册到 Nacos，心跳保活
+nacosRegistry:
+  enabled: false
+  nacos:
+    enabled: true
+    endpoint: "http://127.0.0.1:8080"
+    namingEndpoint: "http://127.0.0.1:56000"
+    namespace: ""
+    group: "DEFAULT_GROUP"
+    username: "nacos"
+    password: "nacos"
+    apiVersion: "v3"
+  service:
+    serviceName: "my-service"
+    addr: "127.0.0.1:8080"
+    weight: 1
+    zone: "default"
+    metadata:
+      version: "1.0.0"
+
+# Nacos 服务发现配置
+# 定期从 Nacos 拉取服务实例列表，支持注册/注销回调
+nacosDiscovery:
+  enabled: false
+  nacos:
+    enabled: true
+    endpoint: "http://127.0.0.1:8080"
+    namingEndpoint: "http://127.0.0.1:56000"
+    namespace: ""
+    group: "DEFAULT_GROUP"
+    username: "nacos"
+    password: "nacos"
+    apiVersion: "v3"
+  service:
+    serviceName: "upstream-service"
+  scanInterval: "10s"
+  zone: "default"
+
+# Nacos 配置中心配置
+# 从 Nacos 拉取配置文件，支持轮询监听变更
+nacosConfigCenter:
+  enabled: false
+  nacos:
+    enabled: true
+    endpoint: "http://127.0.0.1:8080"
+    namespace: ""
+    dataID: "app.yaml"
+    group: "DEFAULT_GROUP"
+    username: "nacos"
+    password: "nacos"
+    pollInterval: "5s"
+    apiVersion: "v3"
