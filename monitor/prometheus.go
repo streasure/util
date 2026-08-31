@@ -41,6 +41,7 @@ type Stats struct {
 	MessagesDroppedCircuit        int64
 	MessagesDroppedIntegrity      int64
 	MessagesDroppedFilterChain    int64
+	MessagesDroppedAuth           int64
 
 	LatencyP50Us        int64
 	LatencyP95Us        int64
@@ -213,6 +214,7 @@ func RenderPrometheusTextWithPrefix(s Stats, prefix string) string {
 	writeMetricI(&b, p+"messages_dropped_circuit_total", "counter", "Dropped circuit breaker", s.MessagesDroppedCircuit)
 	writeMetricI(&b, p+"messages_dropped_integrity_total", "counter", "Dropped integrity check", s.MessagesDroppedIntegrity)
 	writeMetricI(&b, p+"messages_dropped_filter_chain_total", "counter", "Dropped filter chain", s.MessagesDroppedFilterChain)
+	writeMetricI(&b, p+"messages_dropped_auth_total", "counter", "Dropped unauthorized", s.MessagesDroppedAuth)
 
 	writeMetricI(&b, p+"latency_p50_us", "gauge", "P50 latency us", s.LatencyP50Us)
 	writeMetricI(&b, p+"latency_p95_us", "gauge", "P95 latency us", s.LatencyP95Us)

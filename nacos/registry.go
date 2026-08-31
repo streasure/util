@@ -26,6 +26,7 @@ type Registry struct {
 	cfg      RegistryConfig
 	client   *client
 	stopCh   chan struct{}
+	stopOnce sync.Once
 	wg       sync.WaitGroup
 }
 
@@ -69,7 +70,9 @@ func (r *Registry) Destroy() {
 	if !r.cfg.Enabled {
 		return
 	}
-	close(r.stopCh)
+	r.stopOnce.Do(func() {
+		close(r.stopCh)
+	})
 	r.wg.Wait()
 	_ = r.deregisterInstance()
 }

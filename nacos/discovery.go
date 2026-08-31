@@ -32,6 +32,7 @@ type Discovery struct {
 	mu        sync.RWMutex
 	callbacks []ServiceChangeCallback
 	stopCh    chan struct{}
+	stopOnce  sync.Once
 	wg        sync.WaitGroup
 }
 
@@ -69,7 +70,9 @@ func (d *Discovery) Destroy() {
 	if !d.cfg.Enabled {
 		return
 	}
-	close(d.stopCh)
+	d.stopOnce.Do(func() {
+		close(d.stopCh)
+	})
 	d.wg.Wait()
 }
 

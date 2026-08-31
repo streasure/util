@@ -12,12 +12,18 @@ github.com/streasure/util
 ├── version/        # 构建版本信息
 ├── gopool/         # goroutine 池（支持泛型返回值）
 ├── rand/           # 随机数工具（概率/权重/采样）
+├── rand/wrand/     # 高性能加权随机选择（二分搜索）
 ├── gametime/       # 游戏时间工具（重置时间/偏移）
 ├── errors/         # 错误处理（堆栈/错误码/包装）
 ├── gevent/         # 反射事件分发器
 ├── sensitive/      # 敏感词过滤
 ├── monitor/        # Prometheus 监控导出 + Grafana 配置
 ├── nacos/          # Nacos 服务注册/发现/配置中心
+├── bucket/         # 令牌桶限流器
+├── compressex/     # JSON+Gzip 压缩
+├── config/         # 泛型配置加载器（YAML）
+├── container/priority_queue/ # 优先队列（泛型）
+├── backend/        # 通用 HTTP 客户端
 ├── config/         # 共用 YAML 配置文件
 │   ├── nacos.yaml
 │   ├── prometheus.yaml
@@ -31,6 +37,12 @@ github.com/streasure/util
 import "github.com/streasure/util/util"
 import "github.com/streasure/util/monitor"
 import "github.com/streasure/util/nacos"
+import "github.com/streasure/util/bucket"
+import "github.com/streasure/util/compressex"
+import "github.com/streasure/util/config"
+import "github.com/streasure/util/container/priority_queue"
+import "github.com/streasure/util/rand/wrand"
+import "github.com/streasure/util/backend"
 ```
 
 ## 包说明
@@ -57,6 +69,8 @@ import "github.com/streasure/util/nacos"
 | uuid.go | `NewUUID` `NewUUIDBytes` | UUID V4 生成 |
 | sys.go | `GoRoutineId` | 当前 goroutine ID |
 | id_allocator.go | `Uint32IdAllocator` `GenerateSessionId` | ID 分配器 |
+| rangeable.go | `CheckRangeIntersect[T]` | 区间重叠检测 |
+| timeout_waitgroup.go | `NewTimeoutWaitGroup(n)` | 带超时的 WaitGroup |
 
 ### mathx/ - 2D 向量数学
 
@@ -108,6 +122,26 @@ pool.Stop()
 | `RandWeightSlice` | 权重随机索引 |
 | `WeightRandom[T]` | 泛型权重选择器 |
 
+### rand/wrand/ - 高性能加权随机
+
+| 函数 | 说明 |
+|------|------|
+| `NewRandChooser[T, W](choices...)` | 创建加权选择器 |
+| `chooser.Pick()` | 随机选择一个 |
+| `chooser.PickSource(rs)` | 指定随机源选择 |
+| `chooser.PickN(n)` | 随机选择 n 个不重复 |
+| `NewRandChoices[T]([][]T)` | 二维数组创建 choices |
+
+基于二分搜索的预排序缓存，大规模数据下性能显著优于线性扫描。
+
+```go
+chooser, _ := wrand.NewRandChooser(
+    wrand.NewRandChoice("rare", 1),
+    wrand.NewRandChoice("common", 10),
+)
+item := chooser.Pick() // "common" 被选中的概率是 "rare" 的 10 倍
+```
+
 ### gametime/ - 游戏时间
 
 | 函数 | 说明 |
@@ -150,6 +184,84 @@ pool.Stop()
 | `InitWords(words)` | 初始化词库 |
 | `CensorIsPass(text)` | 检查是否通过 |
 | `CensorAndReplace(text)` | 替换敏感词为 `*` |
+
+### bucket/ - 令牌桶限流器
+
+| 函数 | 说明 |
+|------|------|
+| `NewBucket(interval, capacity, quantum)` | 创建令牌桶 |
+| `TakeAvailable(now, count)` | 加锁获取令牌 |
+| `TakeAvailableNoLock(now, count)` | 无锁获取令牌 |
+
+```go
+b := bucket.NewBucket(100*time.Millisecond, 10, 2)
+taken := b.TakeAvailable(time.Now(), 5) // 获取 5 个令牌
+```
+
+### compressex/ - JSON+Gzip 压缩
+
+| 函数 | 说明 |
+|------|------|
+| `ProtoMarshal(v)` | JSON 序列化 + Gzip 压缩 |
+| `ProtoUnmarshal(data, v)` | Gzip 解压 + JSON 反序列化 |
+
+```go
+compressed, _ := compressex/proto.Marshal(myData)
+var result MyData
+compressex.ProtoUnmarshal(compressed, &result)
+```
+
+### config/ - 泛型配置加载器
+
+| 函数 | 说明 |
+|------|------|
+| `Load[T](paths...)` | 加载 YAML 配置到泛型结构体 |
+
+支持多文件合并，自动校验必填字段。
+
+```go
+type MyConfig struct {
+    Host string `mapstructure:"host"`
+    Port int    `mapstructure:"port"`
+}
+
+cfg, err := config.Load[MyConfig]("config.yaml", "override.yaml")
+```
+
+### container/priority_queue/ - 优先队列
+
+| 函数 | 说明 |
+|------|------|
+| `New(opts...)` | 创建优先队列（默认最大堆） |
+| `WithMin(true)` | 切换为最小堆 |
+| `Push(x, priority)` | 入队 |
+| `Pop()` | 出队（返回值和优先级） |
+| `Peek()` | 查看队首 |
+| `Len()` | 长度 |
+| `Clear()` | 清空 |
+
+```go
+pq := priority_queue.New()
+pq.Push("task1", 10)
+pq.Push("task2", 5)
+v, _ := pq.Pop() // 返回 "task1"（优先级最高）
+```
+
+### backend/ - 通用 HTTP 客户端
+
+| 函数 | 说明 |
+|------|------|
+| `HttpCommonGet[T](ctx, url)` | GET 请求，解析 CommonAck 响应 |
+| `HttpCommonPost[T](ctx, url, body)` | POST 请求，解析 CommonAck 响应 |
+| `ActivationCode(ctx, url)` | 激活码请求 |
+| `CommonAck[T]` | 通用响应结构（Code/Msg/Data） |
+
+```go
+result, code, err := backend.HttpCommonGet[ServerInfo](ctx, "http://api/servers")
+if code == backend.CodeSuccess {
+    fmt.Println(result.Name)
+}
+```
 
 ### monitor/ - Prometheus 监控
 
@@ -297,12 +409,12 @@ nacosConfigCenter:
 go test ./... -v
 ```
 
-12 个包，79 个测试用例，全部通过。
+18 个包，全部测试通过。
 
 ## 特性
 
 - **零外部依赖**：monitor/nacos 全部使用标准库 `net/http` 实现
-- **泛型优先**：`Clamp[T]` `Max[T]` `Abs[T]` `SetBit[T]` `WeightRandom[T]` 等
+- **泛型优先**：`Clamp[T]` `Max[T]` `Abs[T]` `SetBit[T]` `WeightRandom[T]` `PriorityQueue` 等
 - **组件化**：所有服务实现 `Component` 接口，统一生命周期管理
 - **插拔式**：配置 `enabled: false` 即可禁用，不引入任何开销
 - **配置共用**：`config/` 目录提供 Nacos/Prometheus/Grafana 标准 YAML，项目直接引用

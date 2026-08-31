@@ -27,6 +27,7 @@ type ConfigCenter struct {
 	client    *client
 	callbacks []ConfigChangeCallback
 	stopCh    chan struct{}
+	stopOnce  sync.Once
 	wg        sync.WaitGroup
 	lastHash  string
 	mu        sync.RWMutex
@@ -68,7 +69,9 @@ func (cc *ConfigCenter) Destroy() {
 	if !cc.cfg.Enabled {
 		return
 	}
-	close(cc.stopCh)
+	cc.stopOnce.Do(func() {
+		close(cc.stopCh)
+	})
 	cc.wg.Wait()
 }
 
