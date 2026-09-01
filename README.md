@@ -6,36 +6,50 @@ Go 通用工具库，提供泛型工具函数、组件生命周期管理、Prome
 
 ```
 github.com/streasure/util
-├── util/           # 通用工具函数（泛型）
-├── mathx/          # 2D 向量数学运算
-├── component/      # 组件生命周期管理
-├── version/        # 构建版本信息
-├── gopool/         # goroutine 池（支持泛型返回值）
-├── rand/           # 随机数工具（概率/权重/采样）
-├── rand/wrand/     # 高性能加权随机选择（二分搜索）
-├── gametime/       # 游戏时间工具（重置时间/偏移）
-├── errors/         # 错误处理（堆栈/错误码/包装）
-├── gevent/         # 反射事件分发器
-├── sensitive/      # 敏感词过滤
-├── monitor/        # Prometheus 监控导出 + Grafana 配置
-├── nacos/          # Nacos 服务注册/发现/配置中心
-├── bucket/         # 令牌桶限流器
-├── compressex/     # JSON+Gzip 压缩
-├── config/         # 泛型配置加载器（YAML）
+├── bitmask/          # 泛型位操作
+├── httputil/         # HTTP 工具（CORS 中间件）
+├── mathutil/         # 泛型数学运算
+├── msg/              # 同步/异步消息
+├── netutil/          # 网络工具（URL 解析/IP 获取）
+├── overflow/         # 溢出安全加减
+├── panicutil/        # 线程安全 panic 捕获
+├── rangeable/        # 区间重叠检测
+├── slice/            # 切片操作
+├── sys/              # 系统工具（goroutine ID）
+├── timeutil/         # 时间工具
+├── timeout_waitgroup/# 带超时的 WaitGroup
+├── uuid/             # UUID V4 生成
+├── id_allocator/     # ID 分配器
+├── mathx/            # 2D 向量数学运算
+├── component/        # 组件生命周期管理
+├── version/          # 构建版本信息
+├── gopool/           # goroutine 池（支持泛型返回值）
+├── rand/             # 随机数工具（概率/权重/采样）
+├── rand/wrand/       # 高性能加权随机选择（二分搜索）
+├── gametime/         # 游戏时间工具（重置时间/偏移）
+├── errors/           # 错误处理（堆栈/错误码/包装）
+├── gevent/           # 反射事件分发器
+├── sensitive/        # 敏感词过滤
+├── prometheus/       # Prometheus 监控导出
+├── nacos/            # Nacos 服务注册/发现/配置中心
+├── bucket/           # 令牌桶限流器
+├── compressex/       # JSON+Gzip 压缩
+├── config/           # 泛型配置加载器（YAML）
 ├── container/priority_queue/ # 优先队列（泛型）
-├── backend/        # 通用 HTTP 客户端
-├── config/         # 共用 YAML 配置文件
+├── backend/          # 通用 HTTP 客户端
+├── config/           # 共用 YAML 配置文件
 │   ├── nacos.yaml
 │   ├── prometheus.yaml
 │   └── grafana.yaml
-└── examples/       # 配置示例
+└── examples/         # 配置示例
 ```
 
 ## 快速开始
 
 ```go
-import "github.com/streasure/util/util"
-import "github.com/streasure/util/monitor"
+import "github.com/streasure/util/mathutil"
+import "github.com/streasure/util/bitmask"
+import "github.com/streasure/util/prometheus"
 import "github.com/streasure/util/nacos"
 import "github.com/streasure/util/bucket"
 import "github.com/streasure/util/compressex"
@@ -47,30 +61,97 @@ import "github.com/streasure/util/backend"
 
 ## 包说明
 
-### util/ - 通用工具函数
+### bitmask/ - 位操作
 
-| 文件 | 函数 | 说明 |
-|------|------|------|
-| math.go | `Clamp[T]` `Max[T]` `Min[T]` `Abs[T]` `Operator[T]` | 泛型数学运算 |
-| math.go | `RandInt` `RandInt32` `RandInt64` | [min, max] 范围随机 |
-| time.go | `TimeStampToString` `TimeToString` | 时间格式化 |
-| time.go | `DiffNatureDays` | 自然天差值 |
-| time.go | `IsSameDay` `IsSameWeek` `IsSameMonth` `IsToday` | 时间周期判断 |
-| time.go | `GetZeroTime` `GetTimeByHour` `GetDateKey` | 时间获取 |
-| net.go | `DecodeUrlValues` | URL 参数解析到 struct |
-| net.go | `GetHttpIP` `LocalIP` | 获取客户端/本机 IP |
-| http.go | `CorsHandlerFunc` `CorsHandler` | CORS 跨域中间件 |
-| panic.go | `PanicCatcher` | 线程安全 panic 捕获 |
-| slice.go | `IsNil` `StrToSlice` `UniqueSlice[T]` `EqualSlice[T]` | 切片操作 |
-| bitmask.go | `SetBit[T]` `ResetBit[T]` `HasBit[T]` | 泛型位操作 |
-| bitmask.go | `SetBitSlice` `ResetBitSlice` `HasBitSlice` | 字节数组位操作 |
-| overflow.go | `CalcAddOverflow` `CalcMinusOverflow` | 溢出安全加减 |
-| msg.go | `SyncMessage` `AsyncMessage` | 同步/异步消息 |
-| uuid.go | `NewUUID` `NewUUIDBytes` | UUID V4 生成 |
-| sys.go | `GoRoutineId` | 当前 goroutine ID |
-| id_allocator.go | `Uint32IdAllocator` `GenerateSessionId` | ID 分配器 |
-| rangeable.go | `CheckRangeIntersect[T]` | 区间重叠检测 |
-| timeout_waitgroup.go | `NewTimeoutWaitGroup(n)` | 带超时的 WaitGroup |
+| 函数 | 说明 |
+|------|------|
+| `SetBit[T]` `ResetBit[T]` `HasBit[T]` | 泛型位操作 |
+| `SetBitSlice` `ResetBitSlice` `HasBitSlice` | 字节数组位操作 |
+
+### httputil/ - HTTP 工具
+
+| 函数 | 说明 |
+|------|------|
+| `CorsHandlerFunc` `CorsHandler` | CORS 跨域中间件 |
+
+### mathutil/ - 数学运算
+
+| 函数 | 说明 |
+|------|------|
+| `Clamp[T]` `Max[T]` `Min[T]` `Abs[T]` `Operator[T]` | 泛型数学运算 |
+| `RandInt` `RandInt32` `RandInt64` | [min, max] 范围随机 |
+
+### msg/ - 消息处理
+
+| 类型 | 说明 |
+|------|------|
+| `SyncMessage` | 同步消息 |
+| `AsyncMessage` | 异步消息 |
+
+### netutil/ - 网络工具
+
+| 函数 | 说明 |
+|------|------|
+| `DecodeUrlValues` | URL 参数解析到 struct |
+| `GetHttpIP` `LocalIP` | 获取客户端/本机 IP |
+
+### overflow/ - 溢出处理
+
+| 函数 | 说明 |
+|------|------|
+| `CalcAddOverflow` `CalcMinusOverflow` | 溢出安全加减 |
+
+### panicutil/ - panic 捕获
+
+| 类型 | 说明 |
+|------|------|
+| `PanicCatcher` | 线程安全 panic 捕获 |
+
+### rangeable/ - 区间操作
+
+| 函数 | 说明 |
+|------|------|
+| `CheckRangeIntersect[T]` | 区间重叠检测 |
+
+### slice/ - 切片操作
+
+| 函数 | 说明 |
+|------|------|
+| `IsNil` `StrToSlice` `UniqueSlice[T]` `EqualSlice[T]` | 切片操作 |
+
+### sys/ - 系统工具
+
+| 函数 | 说明 |
+|------|------|
+| `GoRoutineId` | 当前 goroutine ID |
+
+### timeutil/ - 时间工具
+
+| 函数 | 说明 |
+|------|------|
+| `TimeStampToString` `TimeToString` | 时间格式化 |
+| `DiffNatureDays` | 自然天差值 |
+| `IsSameDay` `IsSameWeek` `IsSameMonth` `IsToday` | 时间周期判断 |
+| `GetZeroTime` `GetTimeByHour` `GetDateKey` | 时间获取 |
+
+### timeout_waitgroup/ - 超时等待组
+
+| 函数 | 说明 |
+|------|------|
+| `NewTimeoutWaitGroup(n)` | 带超时的 WaitGroup |
+
+### uuid/ - UUID 生成
+
+| 函数 | 说明 |
+|------|------|
+| `NewUUID` `NewUUIDBytes` | UUID V4 生成 |
+
+### id_allocator/ - ID 分配器
+
+| 类型 | 说明 |
+|------|------|
+| `Uint32IdAllocator` | ID 分配器 |
+| `GenerateSessionId` | 会话 ID 生成 |
 
 ### mathx/ - 2D 向量数学
 
@@ -263,7 +344,7 @@ if code == backend.CodeSuccess {
 }
 ```
 
-### monitor/ - Prometheus 监控
+### prometheus/ - Prometheus 监控
 
 | 类型 | 说明 |
 |------|------|
@@ -276,7 +357,7 @@ if code == backend.CodeSuccess {
 | `RenderPrometheusTextWithPrefix(s, prefix)` | 带前缀渲染 |
 
 ```go
-exp := monitor.NewExporter(monitor.ExporterConfig{
+exp := prometheus.NewExporter(prometheus.ExporterConfig{
     Enabled: true, Addr: ":9100", Path: "/metrics", Prefix: "app",
 }, myProvider)
 container.Add(exp)
@@ -287,8 +368,8 @@ container.Add(exp)
 | 文件 | 配置结构 | 用途 |
 |------|---------|------|
 | `nacos.yaml` | `nacos.RegistryConfig` + `nacos.DiscoveryConfig` + `nacos.ConfigCenterConfig` | Nacos 连接/注册/发现/配置中心 |
-| `prometheus.yaml` | `monitor.ExporterConfig` | Prometheus 指标导出 |
-| `grafana.yaml` | `monitor.GrafanaConfig` | Grafana 数据源 + Dashboard 导入 |
+| `prometheus.yaml` | `prometheus.ExporterConfig` | Prometheus 指标导出 |
+| `grafana.yaml` | `prometheus.GrafanaConfig` | Grafana 数据源 + Dashboard 导入 |
 
 所有配置通过 `enabled` 字段控制启停，项目引用时直接加载对应 YAML 即可。
 
@@ -408,8 +489,6 @@ nacosConfigCenter:
 ```bash
 go test ./... -v
 ```
-
-18 个包，全部测试通过。
 
 ## 特性
 

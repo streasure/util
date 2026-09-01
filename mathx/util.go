@@ -3,7 +3,7 @@ package mathx
 import (
 	"math"
 
-	"github.com/streasure/util/util"
+	"github.com/streasure/util/mathutil"
 )
 
 const Epsilon float64 = 1e-10
@@ -24,7 +24,7 @@ func IsFloatSame(f1 float64, f2 float64) bool {
 
 // Deprecated: Use util.Clamp[T] instead.
 func Clamp(f float64, low float64, high float64) float64 {
-	return util.Clamp(f, low, high)
+	return mathutil.Clamp(f, low, high)
 }
 
 func IsClamped(f float64, low float64, high float64) bool {
