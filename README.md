@@ -16,7 +16,7 @@ github.com/streasure/util
 ├── rangeable/        # 区间重叠检测
 ├── slice/            # 切片操作
 ├── sys/              # 系统工具（goroutine ID）
-├── timeutil/         # 时间工具
+├── timeutil/         # 时间工具（偏移/格式化/天差值）
 ├── timeout_waitgroup/# 带超时的 WaitGroup
 ├── uuid/             # UUID V4 生成
 ├── id_allocator/     # ID 分配器
@@ -26,7 +26,8 @@ github.com/streasure/util
 ├── gopool/           # goroutine 池（支持泛型返回值）
 ├── rand/             # 随机数工具（概率/权重/采样）
 ├── rand/wrand/       # 高性能加权随机选择（二分搜索）
-├── gametime/         # 游戏时间工具（重置时间/偏移）
+├── gametime/         # 游戏时间工具（偏移/重置时间）
+├── gametime/now/     # 游戏时间边界计算（日/周/月/年）
 ├── errors/           # 错误处理（堆栈/错误码/包装）
 ├── gevent/           # 反射事件分发器
 ├── sensitive/        # 敏感词过滤
@@ -57,6 +58,9 @@ import "github.com/streasure/util/config"
 import "github.com/streasure/util/container/priority_queue"
 import "github.com/streasure/util/rand/wrand"
 import "github.com/streasure/util/backend"
+import "github.com/streasure/util/gametime"
+import "github.com/streasure/util/gametime/now"
+import "github.com/streasure/util/timeutil"
 ```
 
 ## 包说明
@@ -129,10 +133,29 @@ import "github.com/streasure/util/backend"
 
 | 函数 | 说明 |
 |------|------|
+| `SetOffset(d)` `GetOffset()` | 全局时间偏移 |
+| `Now()` `Timestamp()` | 偏移感知的时间 |
+| `Since(t)` `Until(t)` | 时间差计算 |
 | `TimeStampToString` `TimeToString` | 时间格式化 |
-| `DiffNatureDays` | 自然天差值 |
+| `DiffNatureDays(t1, t2)` | 自然天差值（高性能整除实现） |
+| `DiffDays(end, start)` | 时间差天数 |
+| `ZeroTimeOfDay(t)` | 截取到午夜 |
+| `NormalizeTimeOfDay(t, hour)` | 归一化到每日重置时间 |
+| `GetTomorrowStamp()` | 获取明天午夜 |
 | `IsSameDay` `IsSameWeek` `IsSameMonth` `IsToday` | 时间周期判断 |
 | `GetZeroTime` `GetTimeByHour` `GetDateKey` | 时间获取 |
+
+```go
+// 设置全局时间偏移（游戏服务器常用）
+timeutil.SetOffset(5 * time.Hour)
+now := timeutil.Now() // 返回当前时间 + 5小时
+
+// 计算两个时间戳的自然天差
+days := timeutil.DiffNatureDays(1609459200, 1609718400) // 3天
+
+// 归一化到每日重置时间（如凌晨5点刷新）
+resetTime := timeutil.NormalizeTimeOfDay(time.Now(), 5)
+```
 
 ### timeout_waitgroup/ - 超时等待组
 
@@ -227,12 +250,66 @@ item := chooser.Pick() // "common" 被选中的概率是 "rare" 的 10 倍
 
 | 函数 | 说明 |
 |------|------|
-| `SetOffset(d)` | 全局时间偏移 |
-| `Now` `Since` `Until` | 偏移感知的时间 |
-| `NewRefTime(DailyTime)` | 参考时间（如每日 5 点刷新） |
-| `RefTime.IsSameDay` `IsSameWeek` `IsSameMonth` | 周期判断 |
-| `RefTime.NextNDayResetTime` `NextNWeeksResetTime` | 重置时间计算 |
-| `RefTime.SubDay` | 天数差 |
+| `SetOffset(d)` `GetOffset()` | 全局时间偏移 |
+| `Now()` `Timestamp()` | 偏移感知的时间/时间戳 |
+| `Since(t)` `Until(t)` | 时间差计算 |
+| `Unix(t, nsec)` | 时间戳转换 |
+
+```go
+// 设置全局时间偏移
+gametime.SetOffset(-8 * time.Hour) // 时区补偿
+
+now := gametime.Now()       // 当前游戏时间
+ts := gametime.Timestamp()  // 当前游戏时间戳
+d := gametime.Since(past)   // 距过去时间的差
+```
+
+### gametime/now/ - 游戏时间边界
+
+| 函数 | 说明 |
+|------|------|
+| `BeginningOfDay()` | 当天开始（00:00:00） |
+| `BeginningOfWeek()` | 当周开始（可配置周起始日） |
+| `BeginningOfMonth()` | 当月开始 |
+| `BeginningOfYear()` | 当年开始 |
+| `EndOfDay()` | 当天结束（23:59:59） |
+| `EndOfWeek()` | 当周结束 |
+| `EndOfMonth()` | 当月结束 |
+| `EndOfYear()` | 当年结束 |
+| `SetWeekStartDay(day)` | 设置周起始日（默认周一） |
+| `With(t)` `New(t)` | 为任意时间创建边界计算器 |
+
+```go
+// 获取本周开始时间
+weekStart := now.BeginningOfWeek()
+
+// 获取当月结束时间
+monthEnd := now.EndOfMonth()
+
+// 设置周日为起始日
+now.SetWeekStartDay(time.Sunday)
+weekStart := now.BeginningOfWeek()
+```
+
+### gametime/ref_time.go - 参考时间系统
+
+| 函数 | 说明 |
+|------|------|
+| `NewRefTime(DailyTime{H,M,S})` | 创建参考时间（如每日5点刷新） |
+| `NextNDayResetTime(t, days)` | 下N天重置时间 |
+| `NextNWeeksResetTime(t, weeks)` | 下N周重置时间 |
+| `NextNMonthsMonthdayResetTime(t, months, day)` | 下N月某日重置时间 |
+| `IsSameDay` `IsSameWeek` `IsSameMonth` | 周期判断（支持多种时间类型） |
+| `SubDay(a, b)` | 天数差 |
+
+```go
+// 每日凌晨5点重置
+rt := gametime.NewRefTime(gametime.DailyTime{Hour: 5})
+resetTime := rt.NextNDayResetTime(time.Now(), 1)
+
+// 判断两个时间是否在同一周
+sameWeek := gametime.IsSameWeek(time1, time2)
+```
 
 ### errors/ - 错误处理
 
@@ -484,10 +561,44 @@ nacosConfigCenter:
 
 所有组件通过 `enabled` 控制是否接入，`false` 时不启动任何网络连接。
 
+## 性能基准测试
+
+运行压测：
+
+```bash
+go test -v -run='^$' -bench='.' -benchmem ./...
+```
+
+### 核心函数性能（i5-10400F）
+
+| 包 | 函数 | 性能 | 内存分配 |
+|----|------|------|---------|
+| timeutil | `DiffNatureDays` | 0.25 ns/op | 0 B/op |
+| timeutil | `IsSameDayUnix` | 0.25 ns/op | 0 B/op |
+| timeutil | `Now` | 10.66 ns/op | 0 B/op |
+| gametime | `Now` | 17.17 ns/op | 0 B/op |
+| gametime | `GetOffset` | 0.31 ns/op | 0 B/op |
+| gametime/now | `BeginningOfDay` | 73 ns/op | 0 B/op |
+| gametime/now | `BeginningOfWeek` | 77 ns/op | 0 B/op |
+| slice | `UniqueSlice` (小) | 84 ns/op | 64 B/op |
+| slice | `StrToSlice` | 0.58 ns/op | 0 B/op |
+| rand | `IntN` | 11.87 ns/op | 0 B/op |
+| rand | `Float64` | 8.52 ns/op | 0 B/op |
+| mathx | `V2.Add` | 2.53 ns/op | 0 B/op |
+| mathx | `Normalize` | 11.33 ns/op | 0 B/op |
+| mathutil | `Clamp` | 0.31 ns/op | 0 B/op |
+| mathutil | `Abs` | 0.30 ns/op | 0 B/op |
+| overflow | `CalcAddOverflow` | 0.32 ns/op | 0 B/op |
+| bitmask | `SetBit` | 0.31 ns/op | 0 B/op |
+
 ## 测试
 
 ```bash
+# 运行所有单元测试
 go test ./... -v
+
+# 运行压测
+go test -v -run='^$' -bench='.' -benchmem ./...
 ```
 
 ## 特性
@@ -497,3 +608,5 @@ go test ./... -v
 - **组件化**：所有服务实现 `Component` 接口，统一生命周期管理
 - **插拔式**：配置 `enabled: false` 即可禁用，不引入任何开销
 - **配置共用**：`config/` 目录提供 Nacos/Prometheus/Grafana 标准 YAML，项目直接引用
+- **高性能**：核心函数通过整除运算、内存池、预排序缓存等优化
+- **游戏时间支持**：全局时间偏移、每日重置时间、周期判断等游戏服务器常用功能
