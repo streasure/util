@@ -145,8 +145,7 @@ func shuffleN[T any](n int, array []T) {
 	if len(array) <= n {
 		return
 	}
-	for i := 0; i < n; i++ {
-		index := RangeInt(i, len(array)-1)
-		array[i], array[index] = array[index], array[i]
-	}
+	rand.Shuffle(len(array), func(i, j int) {
+		array[i], array[j] = array[j], array[i]
+	})
 }

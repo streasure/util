@@ -6,6 +6,36 @@ const (
 	SECONDS_OF_DAY = 86400
 )
 
+var _, localOffset = time.Now().Zone()
+var offset64 = int64(localOffset)
+
+var offset time.Duration
+
+func SetOffset(d time.Duration) time.Duration {
+	offset = d
+	return offset
+}
+
+func GetOffset() time.Duration {
+	return offset
+}
+
+func Now() time.Time {
+	return time.Now().Add(offset)
+}
+
+func Timestamp() int64 {
+	return Now().Unix()
+}
+
+func Since(t time.Time) time.Duration {
+	return Now().Sub(t)
+}
+
+func Until(t time.Time) time.Duration {
+	return t.Sub(Now())
+}
+
 func TimeStampToString(ts int64) string {
 	tm := time.Unix(ts, 0)
 	return tm.Format("2006-01-02 15:04:05")
@@ -19,26 +49,39 @@ func DiffNatureDays(t1, t2 int64) int {
 	if t1 == t2 {
 		return 0
 	}
-	if t1 > t2 {
-		t1, t2 = t2, t1
+	d1 := (t1 + offset64) / SECONDS_OF_DAY
+	d2 := (t2 + offset64) / SECONDS_OF_DAY
+	diff := d2 - d1
+	if diff < 0 {
+		return int(-diff)
 	}
+	return int(diff)
+}
 
-	diffDays := 0
-	secDiff := t2 - t1
-	if secDiff > SECONDS_OF_DAY {
-		tmpDays := int(secDiff / SECONDS_OF_DAY)
-		t1 += int64(tmpDays) * SECONDS_OF_DAY
-		diffDays += tmpDays
+func DiffDays(endTime, startTime time.Time) int {
+	start := startTime.Truncate(24 * time.Hour)
+	end := endTime.Truncate(24 * time.Hour)
+	return int(end.Sub(start).Hours() / 24)
+}
+
+func ZeroTimeOfDay(t time.Time) time.Time {
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+}
+
+func NormalizeTimeOfDay(t time.Time, startHour int) time.Time {
+	y, m, d := t.Date()
+	hour, _, _ := t.Clock()
+	if hour < startHour {
+		return time.Date(y, m, d-1, startHour, 0, 0, 0, t.Location())
 	}
+	return time.Date(y, m, d, startHour, 0, 0, 0, t.Location())
+}
 
-	st := time.Unix(t1, 0)
-	et := time.Unix(t2, 0)
-	dateFormatTpl := "20060102"
-	if st.Format(dateFormatTpl) != et.Format(dateFormatTpl) {
-		diffDays += 1
-	}
-
-	return diffDays
+func GetTomorrowStamp() time.Time {
+	now := Now()
+	y, m, d := now.Date()
+	return time.Date(y, m, d+1, 0, 0, 0, 0, now.Location())
 }
 
 func IsSameDay(a, b time.Time) bool {
@@ -46,9 +89,9 @@ func IsSameDay(a, b time.Time) bool {
 }
 
 func IsSameDayUnix(t1, t2 int64) bool {
-	tt1 := time.Unix(t1, 0)
-	tt2 := time.Unix(t2, 0)
-	return tt1.Year() == tt2.Year() && tt1.YearDay() == tt2.YearDay()
+	d1 := (t1 + offset64) / SECONDS_OF_DAY
+	d2 := (t2 + offset64) / SECONDS_OF_DAY
+	return d1 == d2
 }
 
 func IsSameWeek(t1, t2 int64) bool {
@@ -58,17 +101,17 @@ func IsSameWeek(t1, t2 int64) bool {
 }
 
 func IsSameMonth(t1, t2 int64) bool {
-	y1, m1, _ := time.Unix(t1, 0).Date()
-	y2, m2, _ := time.Unix(t2, 0).Date()
-	return y1 == y2 && m1 == m2
+	tm1 := time.Unix(t1, 0)
+	tm2 := time.Unix(t2, 0)
+	return tm1.Year() == tm2.Year() && tm1.Month() == tm2.Month()
 }
 
 func IsToday(t time.Time) bool {
-	return IsSameDay(t, time.Now())
+	return IsSameDay(t, Now())
 }
 
 func IsTodayUnix(unix int64) bool {
-	return IsSameDay(time.Unix(unix, 0), time.Now())
+	return IsSameDayUnix(unix, Timestamp())
 }
 
 func GetZeroTime(d time.Time) time.Time {

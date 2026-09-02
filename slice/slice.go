@@ -24,11 +24,31 @@ func StrToSlice(str string) []byte {
 }
 
 func UniqueSlice[S ~[]E, E comparable](s S) S {
-	if len(s) < 2 {
+	n := len(s)
+	if n < 2 {
 		return s
 	}
-	picked := make(map[E]struct{}, len(s))
-	ret := make([]E, 0, len(s))
+
+	if n <= 32 {
+		ret := make([]E, 0, n)
+		for i := 0; i < n; i++ {
+			v := s[i]
+			found := false
+			for j := 0; j < len(ret); j++ {
+				if ret[j] == v {
+					found = true
+					break
+				}
+			}
+			if !found {
+				ret = append(ret, v)
+			}
+		}
+		return ret
+	}
+
+	picked := make(map[E]struct{}, n)
+	ret := make([]E, 0, n)
 	for _, v := range s {
 		if _, ok := picked[v]; ok {
 			continue

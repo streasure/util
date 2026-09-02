@@ -21,6 +21,11 @@ func (v *V2) LenSqrt() float64 {
 
 func (v *V2) Normalize() *V2 {
 	l := v.Len()
+	if l < Epsilon {
+		v.X = 0
+		v.Y = 0
+		return v
+	}
 	v.X /= l
 	v.Y /= l
 	return v
@@ -45,6 +50,9 @@ func (v *V2) Mul(f float64) *V2 {
 }
 
 func (v *V2) Div(f float64) *V2 {
+	if f == 0 {
+		return v
+	}
 	v.X /= f
 	v.Y /= f
 	return v
@@ -67,6 +75,9 @@ func Mul(v V2, f float64) V2 {
 }
 
 func Div(v V2, f float64) V2 {
+	if f == 0 {
+		return v
+	}
 	return NewV2(v.X/f, v.Y/f)
 }
 

@@ -18,6 +18,18 @@ var (
 	offset      time.Duration
 )
 
+func GetOffset() time.Duration {
+	return offset
+}
+
+func Unix(t int64, nsec int64) time.Time {
+	return time.Unix(t, nsec)
+}
+
+func Timestamp() int64 {
+	return Now().Unix()
+}
+
 func SetOffset(d time.Duration) time.Duration {
 	offset = d
 	return offset
