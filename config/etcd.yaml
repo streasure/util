@@ -1,11 +1,18 @@
-# etcd Component 配置示例
+# 单个 etcd Component 配置，注册、发现和动态配置按需启用
 enabled: true
 etcd:
+  endpoint: "http://127.0.0.1:2379"
   endpoints:
     - "http://127.0.0.1:2379"
   dialTimeout: "5s"
   servicePrefix: "/services"
   configPrefix: "/config"
+  username: ""
+  password: ""
+  certFile: ""
+  certKeyFile: ""
+  caCertFile: ""
+  tlsServerName: ""
 
 registration:
   enabled: false
@@ -17,7 +24,7 @@ registration:
 discovery:
   enabled: false
   serviceID: "upstream-service"
-  loadBalance: "p2c"
+  loadBalance: "round_robin"
 
 config:
   enabled: false

@@ -1,6 +1,6 @@
 # util
 
-Go 通用工具库，提供泛型工具函数、组件生命周期管理、Prometheus 监控、Nacos 服务治理等能力。所有功能模块支持插拔式接入，通过配置控制启用/禁用。
+ Go 通用工具库，提供泛型工具函数、组件生命周期管理、Prometheus 监控、etcd 服务治理等能力。所有功能模块支持插拔式接入，通过配置控制启用/禁用。
 
 ## 目录
 
@@ -32,14 +32,14 @@ github.com/streasure/util
 ├── gevent/           # 反射事件分发器
 ├── sensitive/        # 敏感词过滤
 ├── prometheus/       # Prometheus 监控导出
-├── nacos/            # Nacos 服务注册/发现/配置中心
+├── etcd/             # etcd 服务注册/发现/配置中心
 ├── bucket/           # 令牌桶限流器
 ├── compressex/       # JSON+Gzip 压缩
 ├── config/           # 泛型配置加载器（YAML）
 ├── container/priority_queue/ # 优先队列（泛型）
 ├── backend/          # 通用 HTTP 客户端
 ├── config/           # 共用 YAML 配置文件
-│   ├── nacos.yaml
+│   ├── etcd.yaml
 │   ├── prometheus.yaml
 │   └── grafana.yaml
 └── examples/         # 配置示例
@@ -51,7 +51,7 @@ github.com/streasure/util
 import "github.com/streasure/util/mathutil"
 import "github.com/streasure/util/bitmask"
 import "github.com/streasure/util/prometheus"
-import "github.com/streasure/util/nacos"
+import "github.com/streasure/util/etcd"
 import "github.com/streasure/util/bucket"
 import "github.com/streasure/util/compressex"
 import "github.com/streasure/util/config"
@@ -444,11 +444,11 @@ container.Add(exp)
 
 | 文件 | 配置结构 | 用途 |
 |------|---------|------|
-| `nacos.yaml` | `nacos.RegistryConfig` + `nacos.DiscoveryConfig` + `nacos.ConfigCenterConfig` | Nacos 连接/注册/发现/配置中心 |
+| `etcd.yaml` | `etcd.ComponentConfig` | etcd 连接、注册、发现、租约和动态配置 |
 | `prometheus.yaml` | `prometheus.ExporterConfig` | Prometheus 指标导出 |
 | `grafana.yaml` | `prometheus.GrafanaConfig` | Grafana 数据源 + Dashboard 导入 |
 
-所有配置通过 `enabled` 字段控制启停，项目引用时直接加载对应 YAML 即可。
+所有配置通过根级 `enabled` 和各功能级 `enabled` 字段控制启停，使用者只需加载 YAML 后创建一个 `etcd.Component`。
 
 支持的内置指标：
 
@@ -467,45 +467,110 @@ container.Add(exp)
 | `app_gc_count` | counter | GC 次数 |
 | `app_custom_*` | gauge | 自定义指标 |
 
-### nacos/ - Nacos 服务治理
+### etcd/ - etcd 服务治理
 
-| 类型 | 说明 |
+etcd 功能通过一个 `Component` 统一接入。注册、发现和动态配置可以单独启用，也可以同时启用。组件实现 `component.Component` 接口，直接加入现有 `component.Container` 即可。
+
+| API | 说明 |
 |------|------|
-| `NewRegistry(cfg)` | 服务注册（心跳保活） |
-| `NewDiscovery(cfg)` | 服务发现（轮询+变更回调） |
-| `NewConfigCenter(cfg)` | 配置中心（轮询监听） |
-| `Config` | 连接配置（支持 v1/v3 API） |
+| `New(ComponentConfig)` | 创建单个 etcd Component |
+| `Pick()` | 使用配置的负载均衡策略选择一个服务地址 |
+| `Acquire()` | 选择地址并返回请求完成函数，供 P2C 统计并发负载 |
+| `Services()` | 获取当前服务发现缓存 |
+| `OnServiceChange` | 监听实例新增、地址更新和注销 |
+| `OnConfigChange` | 监听原始动态配置字节变更 |
+| `OnTypedConfigChange[T]` | 按 JSON/YAML/TOML 解析并校验后回调 |
+| `BindConfig[T]` | 将当前配置快照绑定到指定类型 |
+| `ConfigSnapshot()` | 获取当前有效配置快照 |
+| `LastError()` | 获取后台 Watch/KeepAlive 最近一次错误 |
 
 ```go
-// 注册
-reg := nacos.NewRegistry(nacos.RegistryConfig{
+etcdComponent := etcd.New(etcd.ComponentConfig{
     Enabled: true,
-    Nacos:   nacos.Config{Endpoint: "http://nacos:8080"},
-    Service: nacos.NamingConfig{ServiceName: "my-svc", Addr: ":8080"},
+    Etcd: etcd.Config{
+        Endpoints: []string{"http://etcd-1:2379", "http://etcd-2:2379"},
+        DialTimeout: "5s",
+        ServicePrefix: "/services",
+        ConfigPrefix: "/config",
+    },
+    Registration: etcd.RegistrationConfig{
+        Enabled: true,
+        ServiceID: "my-svc",
+        InstanceID: "instance-1",
+        Address: "127.0.0.1:8080",
+        LeaseTTL: "10s",
+    },
+    Discovery: etcd.DiscoveryConfig{
+        Enabled: true,
+        ServiceID: "upstream-svc",
+        LoadBalance: etcd.LoadBalanceP2C,
+    },
+    Config: etcd.DynamicConfig{
+        Enabled: true,
+        Key: "/config/app.yaml",
+        Format: "yaml",
+    },
 })
-container.Add(reg)
 
-// 发现
-disc := nacos.NewDiscovery(nacos.DiscoveryConfig{
-    Enabled: true,
-    Nacos:   nacos.Config{Endpoint: "http://nacos:8080"},
-    Service: nacos.NamingConfig{ServiceName: "upstream-svc"},
+etcdComponent.OnServiceChange(func(event etcd.ServiceEvent) {
+    fmt.Printf("service %s: %s\n", event.Type, event.Address)
 })
-disc.OnServiceChange(func(e nacos.ServiceEvent) {
-    fmt.Printf("service %s: %s\n", e.Type, e.Service.Address)
-})
-container.Add(disc)
-
-// 配置中心
-cc := nacos.NewConfigCenter(nacos.ConfigCenterConfig{
-    Enabled: true,
-    Nacos:   nacos.Config{Endpoint: "http://nacos:8080", DataID: "app.yaml"},
-})
-cc.OnConfigChange(func(data []byte) {
-    fmt.Printf("config changed: %d bytes\n", len(data))
-})
-container.Add(cc)
+container.Add(etcdComponent)
 ```
+
+服务注册使用以下格式：
+
+```text
+{servicePrefix}/{serviceID}/{instanceID} = {address}
+```
+
+注册时会申请 Lease 并将 Key 绑定到 Lease，默认 TTL 为 `10s`。组件持续执行 `KeepAlive`，租约失效后会自动申请新 Lease 并重新写入同一个服务 Key。进程正常销毁时主动删除 Key；进程崩溃或无法续租时，由 etcd 在租约到期后自动删除 Key。
+
+服务发现通过服务前缀读取实例，并使用 etcd `Watch` 实时同步新增、删除和地址更新。支持以下策略：
+
+| 策略 | 配置值 | 说明 |
+|------|--------|------|
+| 轮询 | `round_robin` | 按稳定排序后的地址依次选择 |
+| 随机 | `random` | 随机选择一个地址 |
+| P2C | `p2c` | 随机抽取两个地址，选择当前并发负载较低者 |
+
+```go
+address, done, ok := etcdComponent.Acquire()
+if ok {
+    defer done()
+    // 使用 address 发起请求
+}
+```
+
+动态配置支持 JSON、YAML 和 TOML。配置更新只有在格式解析和业务校验通过后才会替换内存快照。
+
+```go
+type AppConfig struct {
+    Name string `yaml:"name" json:"name" toml:"name"`
+}
+
+func (c AppConfig) Validate() error {
+    if c.Name == "" { return fmt.Errorf("name is required") }
+    return nil
+}
+
+etcd.OnTypedConfigChange(etcdComponent, func(config *AppConfig) error {
+    return config.Validate()
+})
+```
+
+安全连接配置支持用户名密码和双向 TLS：
+
+| 字段 | 说明 |
+|------|------|
+| `username` / `password` | etcd 用户认证，可与 TLS 同时使用 |
+| `certFile` | 客户端证书文件 |
+| `certKeyFile` | 客户端私钥文件 |
+| `caCertFile` | CA 根证书文件 |
+| `tlsServerName` | TLS 服务端名称覆盖 |
+| `endpoints` | 多个 etcd 节点地址，支持集群故障转移 |
+
+TLS 配置要求 etcd 节点使用 `https` 地址；未配置 TLS 时使用普通 `http` 连接。当前 Go `1.22.5` 使用官方客户端 `go.etcd.io/etcd/client/v3 v3.5.18`。
 
 ## 配置示例
 
@@ -531,35 +596,28 @@ grafana:
       file: "dashboards/gateway-overview.json"
       folder: "sgate"
 
-# Nacos 服务注册（见 config/nacos.yaml）
-nacosRegistry:
+# etcd Component（见 config/etcd.yaml）
+enabled: true
+etcd:
+  endpoints:
+    - "http://127.0.0.1:2379"
+registration:
   enabled: false
-  nacos:
-    endpoint: "http://127.0.0.1:8080"
-    apiVersion: "v3"
-  service:
-    serviceName: "my-service"
-    addr: "127.0.0.1:8080"
-
-# Nacos 服务发现
-nacosDiscovery:
+  serviceID: "my-service"
+  instanceID: "instance-1"
+  address: "127.0.0.1:8080"
+  leaseTTL: "10s"
+discovery:
   enabled: false
-  nacos:
-    endpoint: "http://127.0.0.1:8080"
-  service:
-    serviceName: "upstream-service"
-  scanInterval: "10s"
-
-# Nacos 配置中心
-nacosConfigCenter:
+  serviceID: "upstream-service"
+  loadBalance: "round_robin"
+config:
   enabled: false
-  nacos:
-    endpoint: "http://127.0.0.1:8080"
-    dataID: "app.yaml"
-    pollInterval: "5s"
+  key: "/config/app.yaml"
+  format: "yaml"
 ```
 
-所有组件通过 `enabled` 控制是否接入，`false` 时不启动任何网络连接。
+根级 `enabled: false` 时组件完全禁用，不创建 etcd 网络连接；`registration.enabled`、`discovery.enabled` 和 `config.enabled` 分别控制三项功能。
 
 ## 性能基准测试
 
@@ -603,10 +661,10 @@ go test -v -run='^$' -bench='.' -benchmem ./...
 
 ## 特性
 
-- **零外部依赖**：monitor/nacos 全部使用标准库 `net/http` 实现
+- **依赖可控**：Prometheus 使用标准库 HTTP；etcd 使用官方 v3 客户端
 - **泛型优先**：`Clamp[T]` `Max[T]` `Abs[T]` `SetBit[T]` `WeightRandom[T]` `PriorityQueue` 等
 - **组件化**：所有服务实现 `Component` 接口，统一生命周期管理
 - **插拔式**：配置 `enabled: false` 即可禁用，不引入任何开销
-- **配置共用**：`config/` 目录提供 Nacos/Prometheus/Grafana 标准 YAML，项目直接引用
+- **配置共用**：`config/` 目录提供 etcd/Prometheus/Grafana 标准 YAML，项目直接引用
 - **高性能**：核心函数通过整除运算、内存池、预排序缓存等优化
 - **游戏时间支持**：全局时间偏移、每日重置时间、周期判断等游戏服务器常用功能
